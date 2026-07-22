@@ -40,6 +40,7 @@ export default function Layout({ children, minimal = false }: Props) {
       { label: 'العملاء',       icon: Users,           path: '/customers' },
       { label: 'المستخدمين',    icon: ShieldCheck,      path: '/users' },
       { label: 'التحليلات',     icon: BarChart3,        path: '/analytics' },
+      { label: 'الدعم الفني',    icon: MessagesSquare,   path: '/support' },
       { label: 'الإعدادات',     icon: Settings,         path: '/settings' },
     ];
   } else if (role === 'support') {

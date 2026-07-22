@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useSupportChatStore } from '../../store/supportChatStore';
-import { Send, Loader2, ShieldQuestion, MessagesSquare, User, Sparkles, ArrowRight } from 'lucide-react';
+import { Send, Loader2, ShieldQuestion, MessagesSquare, User, Sparkles, ArrowRight, Lock } from 'lucide-react';
 import { useNotifEventsStore } from '../../store/notifEvents';
 
 export default function SupportChatPage() {
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuthStore(); // قمنا بجلب logout في حال أردت تسجيل خروج الدعم عند الضغط على رجوع
+  const { currentUser, logout } = useAuthStore();
   const {
     ensureThreadForUser,
     sendMessageFromUser,
@@ -17,11 +17,12 @@ export default function SupportChatPage() {
     threads,
     messages,
   } = useSupportChatStore();
-  
-  // استدعاء تابع إضافة الأحداث من المتجر الخاص بك
+
   const { addEvent } = useNotifEventsStore();
 
-  const isSupport = currentUser?.role === 'support' || currentUser?.role === 'superadmin';
+  const isSupportAgent = currentUser?.role === 'support';
+  const isAdminViewer = currentUser?.role === 'superadmin';
+  const isSupport = isSupportAgent || isAdminViewer;
 
   const [threadId, setThreadId] = useState<string>('');
   const [text, setText] = useState('');
@@ -29,16 +30,17 @@ export default function SupportChatPage() {
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // دالة التحكم بالرجوع الذكي
   const handleBack = async () => {
-    if (isSupport) {
-      // إذا كان المستخدم دعم فني أو مدير، يتم توجيهه لصفحة تسجيل الدخول فوراً
-      // (اختياري): إذا كنت تريد تسجيل خروجه فعلياً عند الضغط على السهم، قم بفك التعليق عن السطر التالي:
-       if (logout) await logout(); 
-      
+    if (isSupportAgent) {
+      if (logout) await logout();
       navigate('/login', { replace: true });
+    } else if (isAdminViewer) {
+      if (window.history.length > 2) {
+        navigate(-1);
+      } else {
+        navigate('/dashboard');
+      }
     } else {
-      // للمستخدم العادي، يرجعه للخلف أو للرئيسية كخيار احتياطي
       if (window.history.length > 2) {
         navigate(-1);
       } else {
@@ -47,7 +49,6 @@ export default function SupportChatPage() {
     }
   };
 
-  // 1. إدارة تهيئة الـ Thread وجلبه حسب دور المستخدم الحالي
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
@@ -64,7 +65,6 @@ export default function SupportChatPage() {
     }
   }, [currentUser, ensureThreadForUser, navigate, isSupport, threads, threadId]);
 
-  // 2. تصفية الرسائل الخاصة بالغرفة المحددة حالياً وترتيبها زمنياً
   const threadMessages = useMemo(() => {
     if (!threadId) return [];
     return messages
@@ -72,24 +72,23 @@ export default function SupportChatPage() {
       .sort((a, b) => a.createdAt - b.createdAt);
   }, [messages, threadId]);
 
-  // 3. قراءة المحادثة وتصفير عداد غير المقروء للطرف المعني
   useEffect(() => {
     if (!threadId) return;
     if (!currentUser) return;
 
-    if (isSupport) {
+    if (isSupportAgent) {
       markThreadReadForSupport(threadId);
-    } else {
+    } else if (!isAdminViewer) {
       markThreadReadForUser(threadId, currentUser.id);
     }
-  }, [threadId, currentUser, isSupport, markThreadReadForSupport, markThreadReadForUser, threadMessages.length]);
+  }, [threadId, currentUser, isSupportAgent, isAdminViewer, markThreadReadForSupport, markThreadReadForUser, threadMessages.length]);
 
-  // التمرير التلقائي لأسفل الشات عند وصول رسائل جديدة
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [threadMessages.length]);
 
   const onSend = async () => {
+    if (isAdminViewer) return;
     if (!currentUser) return;
     if (!threadId) return;
     if (!text.trim()) return;
@@ -98,10 +97,9 @@ export default function SupportChatPage() {
     setText('');
     setSending(true);
 
-    // محاكاة تأخير الإرسال قليلاً
     await new Promise((r) => setTimeout(r, 250));
 
-    if (isSupport) {
+    if (isSupportAgent) {
       sendMessageFromSupport({
         threadId,
         fromUserId: currentUser.id,
@@ -116,9 +114,8 @@ export default function SupportChatPage() {
         text: payloadText,
       });
 
-      // إنشاء حدث جديد للمشرف (superadmin) باستخدام المتجر الخاص بك
       addEvent({
-        type: 'booking_created', // نوع الحدث المدعوم حالياً في المتجر الخاص بك
+        type: 'booking_created',
         bookingId: threadId,
         createdByUserId: currentUser.id,
         createdByName: currentUser.name,
@@ -133,8 +130,20 @@ export default function SupportChatPage() {
 
   const activeThread = threads?.find((t) => t.id === threadId);
 
+  const pageTitle = isAdminViewer
+    ? 'أرشيف محادثات الدعم'
+    : isSupportAgent
+    ? 'صندوق وارد الدعم'
+    : 'محادثة الدعم';
+
+  const pageSub = isAdminViewer
+    ? 'عرض فقط لسجل المحادثات بين المستخدمين وفريق الدعم — بدون إمكانية الرد أو التعديل أو الحذف'
+    : isSupportAgent
+    ? 'إدارة رسائل المستخدمين والرد على الاستفسارات'
+    : 'أرسل مشكلتك أو ملاحظاتك وسيتم الرد من فريق الدعم';
+
   return (
-    <div style={S.pageContainer}>
+    <div className="support-page-container" style={S.pageContainer}>
       <div style={S.wrap}>
         <style>{`
           @keyframes messageEntrance {
@@ -146,109 +155,123 @@ export default function SupportChatPage() {
             70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(14, 92, 74, 0); }
             100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(14, 92, 74, 0); }
           }
-          .msg-bubble-animate {
-            animation: messageEntrance 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          }
-          .pulse-indicator {
-            animation: pulseGreen 2s infinite;
-          }
-          .thread-tab-lux {
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-          .thread-tab-lux:hover {
-            background-color: #F3EEDD !important;
-            transform: translateX(-3px);
-          }
-          .composer-input-lux {
-            transition: all 0.2s ease;
-          }
+          .msg-bubble-animate { animation: messageEntrance 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+          .pulse-indicator { animation: pulseGreen 2s infinite; }
+          .thread-tab-lux { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+          .thread-tab-lux:hover { background-color: #F3EEDD !important; transform: translateX(-3px); }
+          .composer-input-lux { transition: all 0.2s ease; }
           .composer-input-lux:focus {
             border-color: #0E5C4A !important;
             box-shadow: 0 0 0 4px rgba(14, 92, 74, 0.12) !important;
             background: #fff !important;
           }
-          .btn-send-lux {
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-          .btn-send-lux:hover {
-            opacity: 0.95;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(10, 68, 55, 0.3);
-          }
-          .btn-send-lux:active {
-            transform: translateY(0);
-          }
-          .btn-back-lux {
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-          }
+          .btn-send-lux { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+          .btn-send-lux:hover { opacity: 0.95; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(10, 68, 55, 0.3); }
+          .btn-send-lux:active { transform: translateY(0); }
+          .btn-back-lux { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
           .btn-back-lux:hover {
             background-color: #E1EEE7 !important;
             color: #0A4437 !important;
             border-color: #BFE0D2 !important;
             transform: translateX(3px);
           }
-          .btn-back-lux:active {
-            transform: scale(0.95);
+          .btn-back-lux:active { transform: scale(0.95); }
+
+          /* ───────────────── Responsive ───────────────── */
+          @media (max-width: 900px) {
+            .support-page-container { padding: 16px 12px !important; }
+            .support-header { gap: 10px !important; margin-bottom: 16px !important; }
+            .support-icon { width: 40px !important; height: 40px !important; }
+            .support-title { font-size: 20px !important; }
+            .support-sub { font-size: 12px !important; }
+            .support-chat-shell { flex-direction: column !important; min-height: unset !important; border-radius: 18px !important; }
+            .support-sidebar {
+              width: 100% !important;
+              border-left: none !important;
+              border-bottom: 1px solid #E5DFC8 !important;
+              max-height: 210px !important;
+            }
+            .support-thread-list { flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important; }
+            .support-thread-tab {
+              min-width: 210px !important;
+              flex-shrink: 0 !important;
+              border-bottom: none !important;
+              border-right: none !important;
+              border-left: 1px solid #F3EEDD !important;
+            }
+            .support-chat-body { height: auto !important; min-height: 300px !important; flex: 1 1 auto !important; padding: 16px 14px !important; }
+            .support-composer { flex-wrap: wrap !important; padding: 12px !important; gap: 8px !important; }
+            .support-composer-input { min-width: 0 !important; flex-basis: 100% !important; }
+            .support-send-btn { flex: 1 !important; padding: 12px 16px !important; }
+            .support-back-btn { width: 38px !important; height: 38px !important; }
+          }
+          @media (max-width: 520px) {
+            .support-header { flex-direction: column !important; align-items: flex-start !important; }
+            .support-header-badges { align-self: flex-start !important; }
+            .support-active-user-bar { font-size: 12px !important; padding: 10px 14px !important; }
           }
         `}</style>
 
-        {/* رأس الصفحة */}
-        <div style={S.header}>
+        <div className="support-header" style={S.header}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* زر العودة الذكي */}
-            <button 
-              onClick={handleBack} 
-              className="btn-back-lux" 
+            <button
+              onClick={handleBack}
+              className="btn-back-lux support-back-btn"
               style={S.backBtn}
-              title={isSupport ? "تسجيل الخروج والرجوع" : "رجوع"}
+              title={isSupportAgent ? 'تسجيل الخروج والرجوع' : 'رجوع'}
             >
               <ArrowRight size={20} />
             </button>
 
-            <div style={S.icon}>
-              {isSupport ? <ShieldQuestion size={22} /> : <MessagesSquare size={22} />}
+            <div className="support-icon" style={S.icon}>
+              {isAdminViewer ? <Lock size={22} /> : isSupportAgent ? <ShieldQuestion size={22} /> : <MessagesSquare size={22} />}
             </div>
             <div>
-              <h1 style={S.title}>{isSupport ? 'صندوق وارد الدعم' : 'محادثة الدعم'}</h1>
-              <p style={S.sub}>
-                {isSupport ? 'إدارة رسائل المستخدمين والرد على الاستفسارات' : 'أرسل مشكلتك أو ملاحظاتك وسيتم الرد من فريق الدعم'}
-              </p>
+              <h1 className="support-title" style={S.title}>{pageTitle}</h1>
+              <p className="support-sub" style={S.sub}>{pageSub}</p>
             </div>
           </div>
-          {!isSupport && (
-            <div style={S.agentBadge}>
-              <div className="pulse-indicator" style={S.onlineDot} />
-              <span>فريق الدعم متصل حالياً</span>
-            </div>
-          )}
+          <div className="support-header-badges">
+            {!isSupport && (
+              <div style={S.agentBadge}>
+                <div className="pulse-indicator" style={S.onlineDot} />
+                <span>فريق الدعم متصل حالياً</span>
+              </div>
+            )}
+            {isAdminViewer && (
+              <div style={S.readOnlyBadge}>
+                <Lock size={13} />
+                <span>وضع القراءة فقط</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* جسم الشات مع القائمة الجانبية */}
-        <div style={S.chatShell}>
+        <div className="support-chat-shell" style={S.chatShell}>
           {isSupport && (
-            <div style={S.sidebar}>
+            <div className="support-sidebar" style={S.sidebar}>
               <div style={S.sidebarHeader}>
-                <span>المحادثات النشطة</span>
+                <span>{isAdminViewer ? 'كل المحادثات (أرشيف)' : 'المحادثات النشطة'}</span>
                 <span style={S.sidebarBadge}>{threads?.length || 0}</span>
               </div>
-              <div style={S.threadList}>
+              <div className="support-thread-list" style={S.threadList}>
                 {threads && threads.length === 0 ? (
                   <p style={{ padding: 24, fontSize: 13, color: '#93A29B', textAlign: 'center', fontWeight: 600 }}>لا توجد محادثات نشطة</p>
                 ) : (
                   threads?.map((th) => {
                     const isSelected = th.id === threadId;
-                    
+
                     const unreadCount = messages.filter(
                       (m) => m.threadId === th.id && m.unreadForSupport
                     ).length;
-                    
+
                     const hasUnread = unreadCount > 0;
 
                     return (
                       <button
                         key={th.id}
                         onClick={() => setThreadId(th.id)}
-                        className="thread-tab-lux"
+                        className="thread-tab-lux support-thread-tab"
                         style={{
                           ...S.threadTab,
                           background: isSelected ? 'linear-gradient(135deg, #E1EEE7 0%, #F6EBCB 100%)' : 'transparent',
@@ -272,7 +295,7 @@ export default function SupportChatPage() {
                             )}
                           </div>
                         </div>
-                        {hasUnread && (
+                        {!isAdminViewer && hasUnread && (
                           <span style={S.unreadBadge}>{unreadCount}</span>
                         )}
                       </button>
@@ -283,25 +306,33 @@ export default function SupportChatPage() {
             </div>
           )}
 
-          {/* مساحة عرض الرسائل وصندوق الكتابة */}
-          <div style={S.mainChatArea}>
+          <div className="support-main-chat" style={S.mainChatArea}>
             {isSupport && activeThread ? (
-              <div style={S.activeUserBar}>
+              <div className="support-active-user-bar" style={S.activeUserBar}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={S.miniUserIcon}><User size={14} color="#0A4437" /></div>
-                  <span>محادثة نشطة مع: <strong style={{ color: '#0A4437', fontWeight: 800 }}>{activeThread.userName}</strong></span>
+                  <span>
+                    {isAdminViewer ? 'أرشيف محادثة: ' : 'محادثة نشطة مع: '}
+                    <strong style={{ color: '#0A4437', fontWeight: 800 }}>{activeThread.userName}</strong>
+                  </span>
                 </div>
               </div>
             ) : null}
 
-            <div style={S.chatBody}>
+            <div className="support-chat-body" style={S.chatBody}>
               {threadMessages.length === 0 ? (
                 <div style={S.empty}>
                   <div style={S.sparkleCircle}>
                     <Sparkles size={24} color="#0E5C4A" />
                   </div>
                   <p style={S.emptyTitle}>لا توجد رسائل بعد</p>
-                  <p style={S.emptySub}>{isSupport ? 'اختر مستخدماً من القائمة للبدء بمراسلته.' : 'أهلاً بك! ابدأ بإرسال أول استفسار وسنرد عليك بأسرع وقت.'}</p>
+                  <p style={S.emptySub}>
+                    {isAdminViewer
+                      ? 'اختر محادثة من القائمة لعرض أرشيفها.'
+                      : isSupportAgent
+                      ? 'اختر مستخدماً من القائمة للبدء بمراسلته.'
+                      : 'أهلاً بك! ابدأ بإرسال أول استفسار وسنرد عليك بأسرع وقت.'}
+                  </p>
                 </div>
               ) : (
                 <div style={S.bubbleList}>
@@ -351,14 +382,13 @@ export default function SupportChatPage() {
               )}
             </div>
 
-            {/* صندوق الإدخال والإرسال */}
-            {threadId && (
-              <div style={S.composer}>
+            {threadId && !isAdminViewer && (
+              <div className="support-composer" style={S.composer}>
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder={isSupport ? 'اكتب رد الدعم وسوف يصل للعميل فوراً…' : 'اكتب رسالتك هنا وسيقوم الفريق بمساعدتك…'}
-                  className="composer-input-lux"
+                  placeholder={isSupportAgent ? 'اكتب رد الدعم وسوف يصل للعميل فوراً…' : 'اكتب رسالتك هنا وسيقوم الفريق بمساعدتك…'}
+                  className="composer-input-lux support-composer-input"
                   style={S.input}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -367,10 +397,17 @@ export default function SupportChatPage() {
                     }
                   }}
                 />
-                <button className="btn-send-lux" style={S.sendBtn} onClick={onSend} disabled={sending}>
+                <button className="btn-send-lux support-send-btn" style={S.sendBtn} onClick={onSend} disabled={sending}>
                   {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} style={{ transform: 'rotate(180deg)' }} />}
                   <span style={{ marginInlineStart: 6 }}>إرسال</span>
                 </button>
+              </div>
+            )}
+
+            {threadId && isAdminViewer && (
+              <div style={S.archiveNotice}>
+                <Lock size={14} />
+                <span>هذه محادثة مؤرشفة — لا يمكن للأدمن الرد أو التعديل أو الحذف، العرض فقط.</span>
               </div>
             )}
           </div>
@@ -384,7 +421,7 @@ const S: Record<string, React.CSSProperties> = {
   pageContainer: { flex: 1, padding: '32px 28px', maxWidth: 1200, width: '100%', margin: '0 auto', boxSizing: 'border-box' },
   wrap: { direction: 'rtl', fontFamily: "'Tajawal', 'Cairo', system-ui, sans-serif" },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 },
-  
+
   backBtn: {
     display: 'flex',
     alignItems: 'center',
@@ -398,21 +435,23 @@ const S: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     outline: 'none',
     boxShadow: '0 4px 6px rgba(28, 43, 39, 0.03)',
+    flexShrink: 0,
   },
 
-  icon: { width: 46, height: 46, borderRadius: 16, background: 'linear-gradient(135deg, #E1EEE7 0%, #F6EBCB 100%)', color: '#0A4437', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #C9A227', boxShadow: '0 4px 6px rgba(10, 68, 55, 0.06)' },
+  icon: { width: 46, height: 46, borderRadius: 16, background: 'linear-gradient(135deg, #E1EEE7 0%, #F6EBCB 100%)', color: '#0A4437', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #C9A227', boxShadow: '0 4px 6px rgba(10, 68, 55, 0.06)', flexShrink: 0 },
   title: { margin: 0, fontSize: 26, fontWeight: 700, color: '#1C2B27', letterSpacing: '-0.3px', fontFamily: "'Amiri', serif" },
   sub: { margin: '4px 0 0', fontSize: 13, color: '#52655F', fontWeight: 500 },
-  
+
   agentBadge: { display: 'flex', alignItems: 'center', gap: 8, background: '#E1EEE7', border: '1px solid #BFE0D2', borderRadius: 20, padding: '6px 12px', fontSize: 12, color: '#0A4437', fontWeight: 700 },
   onlineDot: { width: 8, height: 8, borderRadius: '50%', background: '#0E5C4A' },
+  readOnlyBadge: { display: 'flex', alignItems: 'center', gap: 6, background: '#FBEEEA', border: '1px solid #E9C9BD', borderRadius: 20, padding: '6px 12px', fontSize: 12, color: '#BD5B3E', fontWeight: 700 },
 
   chatShell: { display: 'flex', background: '#fff', border: '1px solid #E5DFC8', borderRadius: 24, overflow: 'hidden', boxShadow: '0 10px 30px rgba(28, 43, 39, 0.05)', minHeight: 560 },
-  
+
   sidebar: { width: '310px', borderLeft: '1px solid #E5DFC8', background: '#FAF6EC', display: 'flex', flexDirection: 'column', flexShrink: 0 },
   sidebarHeader: { padding: '18px 20px', fontWeight: 800, fontSize: 14, borderBottom: '1px solid #E5DFC8', color: '#1C2B27', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   sidebarBadge: { background: '#E5DFC8', color: '#52655F', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 8 },
-  
+
   threadList: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
   threadTab: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', border: 'none', borderBottom: '1px solid #F3EEDD', cursor: 'pointer', textAlign: 'right', outline: 'none' },
   avatarWrapper: { position: 'relative', width: 34, height: 34, borderRadius: '50%', background: '#E5DFC8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -422,7 +461,7 @@ const S: Record<string, React.CSSProperties> = {
   mainChatArea: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#FDFBF5' },
   activeUserBar: { padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #F3EEDD', fontSize: 13, color: '#374151', boxShadow: '0 1px 2px rgba(28,43,39,0.02)' },
   miniUserIcon: { width: 24, height: 24, borderRadius: 8, background: '#E1EEE7', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  
+
   chatBody: { flex: 1, height: 420, overflowY: 'auto', padding: '24px 20px', background: '#FAF6EC' },
   bubbleList: { display: 'flex', flexDirection: 'column' },
 
@@ -434,6 +473,18 @@ const S: Record<string, React.CSSProperties> = {
   composer: { display: 'flex', gap: 12, padding: 18, borderTop: '1px solid #E5DFC8', alignItems: 'center', background: '#fff' },
   input: { flex: 1, borderRadius: 14, border: '1.5px solid #E5DFC8', padding: '13px 16px', outline: 'none', fontSize: 13.5, background: '#FAF6EC', color: '#1C2B27', fontFamily: "'Tajawal', sans-serif" },
   sendBtn: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '13px 20px', borderRadius: 14, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 13.5, color: '#fff', background: 'linear-gradient(135deg, #0E5C4A 0%, #0A4437 100%)', fontFamily: "'Tajawal', sans-serif" },
+
+  archiveNotice: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '16px 18px',
+    borderTop: '1px solid #E5DFC8',
+    background: '#FBEEEA',
+    color: '#BD5B3E',
+    fontSize: 12.5,
+    fontWeight: 700,
+  },
 
   meta: { margin: '0 0 4px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.2px' },
   time: { margin: '4px 0 0', fontSize: 9.5, fontWeight: 700, textAlign: 'left' },
