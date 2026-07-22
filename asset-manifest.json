@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.js": "/booking-admin-dashboard/static/js/main.666ec4c5.js",
+    "main.js": "/booking-admin-dashboard/static/js/main.0c80a89e.js",
     "index.html": "/booking-admin-dashboard/index.html",
-    "main.666ec4c5.js.map": "/booking-admin-dashboard/static/js/main.666ec4c5.js.map"
+    "main.0c80a89e.js.map": "/booking-admin-dashboard/static/js/main.0c80a89e.js.map"
   },
   "entrypoints": [
-    "static/js/main.666ec4c5.js"
+    "static/js/main.0c80a89e.js"
   ]
 }
