@@ -63,7 +63,7 @@ export default function ProfilePage() {
       <div style={S.card}>
         <p style={S.cardTitle}>إجراءات الحساب</p>
         <button style={S.logoutBtn} onClick={handleLogout}>
-          <LogOut size={16} style={{ transform: 'rotate(180deg)' }} /> تسجيل الخروج من حلبي
+          <LogOut size={16} style={{ transform: 'rotate(180deg)' }} /> تسجيل الخروج من ضِيافة
         </button>
       </div>
     </Layout>
