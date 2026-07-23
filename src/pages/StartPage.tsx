@@ -190,7 +190,7 @@ export default function StartPage() {
           {/* Right-To-Left Left Column: High-Impact Typography & Controls */}
           <div style={S.heroLeft}>
             <p className="animate-fade-in" style={S.eyebrow}>
-              حلبي — المنصة النخبوية لإدارة الإقامات الفاخرة والحجوزات الآمنة
+              ضِيافة — المنصة النخبوية لإدارة الإقامات الفاخرة والحجوزات الآمنة
             </p>
             <h1 className="animate-fade-in delay-1 hero-title">
               اختر فندقك المفضّل...<br />

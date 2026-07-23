@@ -80,7 +80,7 @@ export default function Layout({ children, minimal = false }: Props) {
   return (
     <div style={{ ...S.shell, direction: 'rtl' }}>
 
-      {/* ── نظام الألوان والخطوط الموحّد لكامل المنصّة (حلبي) ── */}
+      {/* ── نظام الألوان والخطوط الموحّد لكامل المنصّة (ضِيافة) ── */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Tajawal:wght@300;400;500;700;800;900&display=swap');
 
@@ -121,7 +121,7 @@ export default function Layout({ children, minimal = false }: Props) {
         <div style={S.sidebarTop}>
           <button style={S.logoWrap} onClick={() => go('/home')}>
             <div style={S.logoMark}><Globe size={18} color="#fff" /></div>
-            <span style={S.logoText}>حلبي</span>
+            <span style={S.logoText}>ضِيافة</span>
           </button>
           <button style={S.closeBtn} onClick={closeSidebar} aria-label="إغلاق القائمة">
             <X size={18} />
@@ -166,7 +166,7 @@ export default function Layout({ children, minimal = false }: Props) {
           {minimal ? (
             <button style={S.desktopLogo} onClick={() => go('/home')}>
               <div style={{ ...S.logoMark, width: 28, height: 28 }}><Globe size={14} color="#fff" /></div>
-              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>حلبي</span>
+              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>ضِيافة</span>
             </button>
           ) : (
           <>
@@ -176,7 +176,7 @@ export default function Layout({ children, minimal = false }: Props) {
             </button>
             <button style={S.desktopLogo} onClick={() => go('/home')}>
               <div style={{ ...S.logoMark, width: 28, height: 28 }}><Globe size={14} color="#fff" /></div>
-              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>حلبي</span>
+              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>ضِيافة</span>
             </button>
             <div style={S.searchBox}>
               <Search size={15} color="var(--color-muted)" />
